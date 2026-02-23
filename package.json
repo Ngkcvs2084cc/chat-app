@@ -1,0 +1,20 @@
+{
+  "name": "supabase-chat-system",
+  "version": "1.0.0",
+  "description": "完全免费的安全聊天系统 - Supabase + Vercel",
+  "private": true,
+  "scripts": {
+    "dev": "node build.js && npx http-server build",
+    "build": "node build.js",
+    "start": "npx http-server build",
+    "lint": "echo 'No lint configured'"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  },
+  "devDependencies": {
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
