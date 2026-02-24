@@ -1,7 +1,7 @@
-[build]
-  publish = "public"
-
 [[redirects]]
   from = "/*"
-  to = "/demo-version.html"
+  to = "/public/demo-version.html"
   status = 200
+
+[build]
+  publish = "."
