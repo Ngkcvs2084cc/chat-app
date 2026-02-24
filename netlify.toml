@@ -1,6 +1,6 @@
 [[redirects]]
   from = "/*"
-  to = "/public/demo-version.html"
+  to = "/public/beautiful-secure-version.html"
   status = 200
 
 [build]
