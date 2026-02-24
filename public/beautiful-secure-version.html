@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>匿名聊天系统 - 安全版</title>
+    
+    <!-- React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- bcrypt密码加密 -->
+    <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+                'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 头部 */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+            object-fit: cover;
+        }
+
+        .coin-badge {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-outline {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        /* 主体区域 - 响应式 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        /* 桌面端布局 */
+        @media (min-width: 769px) {
+            .main-content {
+                flex-direction: row;
+            }
+
+            .user-list-container {
+                width: 280px;
+                flex-shrink: 0;
+            }
+
+            .chat-container {
+                flex: 1;
+            }
+        }
+
+        /* 手机/平板端布局 */
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+
+            .user-list-container {
+                height: 35vh;
+                width: 100%;
+            }
+
+            .chat-container {
+                flex: 1;
+            }
+        }
+
+        /* 用户列表 */
+        .user-list-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-list-header {
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-grid {
+            display: grid;
+            gap: 10px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        /* 桌面端：竖向排列 */
+        @media (min-width: 769px) {
+            .user-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 手机端：横向网格 */
+        @media (max-width: 768px) {
+            .user-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            }
+        }
+
+        .user-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .user-card {
+                flex-direction: column;
+                text-align: center;
+                padding: 10px 5px;
+            }
+        }
+
+        .user-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .user-card.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .user-card .avatar {
+            flex-shrink: 0;
+        }
+
+        .user-card-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        @media (max-width: 768px) {
+            .user-card-info {
+                width: 100%;
+            }
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-location {
+            font-size: 12px;
+            opacity: 0.7;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .online-badge {
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            box-shadow: 0 0 6px #00ff00;
+        }
+
+        .unread-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #ff4757;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* 聊天区域 */
+        .chat-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.own {
+            flex-direction: row-reverse;
+        }
+
+        .message .avatar {
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            max-width: 60%;
+        }
+
+        .message-bubble {
+            padding: 10px 15px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            word-wrap: break-word;
+        }
+
+        .message.own .message-bubble {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .message.own .message-time {
+            flex-direction: row-reverse;
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* 输入区域 */
+        .chat-input-container {
+            padding: 15px 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 24px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            transform: scale(1.1);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+            font-size: 14px;
+        }
+
+        /* 模态框 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            border-color: #667eea;
+        }
+
+        .gender-selector {
+            display: flex;
+            gap: 10px;
+        }
+
+        .gender-option {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .gender-option.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+            color: #667eea;
+        }
+
+        .package-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .package-card {
+            padding: 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .package-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .package-card.popular {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+        }
+
+        .package-coins {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .package-price {
+            font-size: 18px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .popular-badge {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ========== Supabase配置 ==========
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_KEY = 'YOUR_SUPABASE_KEY';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // ========== 主应用 ==========
+        function App() {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [onlineUsers, setOnlineUsers] = useState([]);
+            const [selectedUser, setSelectedUser] = useState(null);
+            const [messages, setMessages] = useState([]);
+            const [inputMessage, setInputMessage] = useState('');
+            const [sending, setSending] = useState(false);
+            const [showRegisterModal, setShowRegisterModal] = useState(false);
+            const [showCoinModal, setShowCoinModal] = useState(false);
+            const [unreadCounts, setUnreadCounts] = useState({});
+            const messagesEndRef = useRef(null);
+
+            // 初始化用户
+            useEffect(() => {
+                initUser();
+            }, []);
+
+            // 初始化用户
+            const initUser = async () => {
+                // 检查是否已登录
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                if (session) {
+                    // 已登录，获取用户信息
+                    const { data } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
+                    
+                    setCurrentUser(data);
+                    updateOnlineStatus(data.id, true);
+                } else {
+                    // 创建临时用户
+                    createTempUser();
+                }
+            };
+
+            // 创建临时用户
+            const createTempUser = async () => {
+                const randomNum = Math.floor(Math.random() * 9999);
+                const gender = Math.random() > 0.5 ? 'male' : 'female';
+                
+                const tempUser = {
+                    tempId: `temp_${Date.now()}`,
+                    id: `temp_${Date.now()}`,
+                    username: `游客${randomNum}`,
+                    gender: gender,
+                    avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${randomNum}`,
+                    location: await getLocationFromIP(),
+                    isTemp: true,
+                    coins: 0
+                };
+                
+                setCurrentUser(tempUser);
+                localStorage.setItem('tempUser', JSON.stringify(tempUser));
+            };
+
+            // 获取IP位置
+            const getLocationFromIP = async () => {
+                const apis = [
+                    'https://ipapi.co/json/',
+                    'https://ip-api.com/json/',
+                    'https://ipinfo.io/json'
+                ];
+                
+                for (const api of apis) {
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 3000);
+                        
+                        const response = await fetch(api, {
+                            signal: controller.signal,
+                            mode: 'cors'
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            return data.city || data.region || data.country || '未知';
+                        }
+                    } catch (error) {
+                        console.log(`${api} 失败`);
+                    }
+                }
+                
+                const locations = ['北京', '上海', '广州', '深圳', '杭州', '成都'];
+                return locations[Math.floor(Math.random() * locations.length)];
+            };
+
+            // 更新在线状态
+            const updateOnlineStatus = async (userId, isOnline) => {
+                if (!userId || userId.startsWith('temp_')) return;
+                
+                try {
+                    await supabase
+                        .from('online_users')
+                        .upsert({
+                            id: userId,
+                            is_online: isOnline,
+                            last_seen: new Date().toISOString()
+                        });
+                } catch (error) {
+                    console.error('更新在线状态失败:', error);
+                }
+            };
+
+            // 获取在线用户
+            useEffect(() => {
+                if (!currentUser) return;
+
+                const fetchOnlineUsers = async () => {
+                    try {
+                        const { data } = await supabase
+                            .from('online_users')
+                            .select(`
+                                *,
+                                users (
+                                    id,
+                                    username,
+                                    gender,
+                                    avatar_url,
+                                    location
+                                )
+                            `)
+                            .eq('is_online', true);
+
+                        const users = (data || [])
+                            .filter(u => u.users && u.id !== currentUser.id)
+                            .map(u => ({
+                                ...u.users,
+                                avatarUrl: u.users.avatar_url
+                            }));
+
+                        setOnlineUsers(users);
+                    } catch (error) {
+                        console.error('获取在线用户失败:', error);
+                        // 显示模拟数据
+                        setOnlineUsers([
+                            {
+                                id: '1',
+                                username: '小明',
+                                gender: 'male',
+                                avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ming',
+                                location: '北京'
+                            },
+                            {
+                                id: '2',
+                                username: '小红',
+                                gender: 'female',
+                                avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=hong',
+                                location: '上海'
+                            }
+                        ]);
+                    }
+                };
+
+                fetchOnlineUsers();
+
+                // 订阅在线状态变化
+                const subscription = supabase
+                    .from('online_users')
+                    .on('*', () => {
+                        fetchOnlineUsers();
+                    })
+                    .subscribe();
+
+                return () => {
+                    subscription.unsubscribe();
+                };
+            }, [currentUser]);
+
+            // 获取聊天消息
+            useEffect(() => {
+                if (!currentUser || !selectedUser) return;
+
+                const chatId = [currentUser.id, selectedUser.id].sort().join('_');
+
+                const loadMessages = async () => {
+                    try {
+                        const { data } = await supabase
+                            .from('messages')
+                            .select('*')
+                            .eq('chat_id', chatId)
+                            .order('created_at', { ascending: true });
+
+                        setMessages(data || []);
+                        
+                        // 标记消息为已读
+                        markMessagesAsRead(data || []);
+                    } catch (error) {
+                        console.error('加载消息失败:', error);
+                    }
+                };
+
+                loadMessages();
+
+                // 订阅新消息
+                const subscription = supabase
+                    .from('messages')
+                    .on('INSERT', (payload) => {
+                        if (payload.new.chat_id === chatId) {
+                            setMessages(prev => [...prev, payload.new]);
+                            
+                            if (payload.new.receiver_id === currentUser.id) {
+                                markMessageAsRead(payload.new.id);
+                            }
+                        }
+                    })
+                    .subscribe();
+
+                return () => {
+                    subscription.unsubscribe();
+                };
+            }, [currentUser, selectedUser]);
+
+            // 标记消息为已读
+            const markMessagesAsRead = async (messages) => {
+                const unreadMessages = messages.filter(
+                    m => m.receiver_id === currentUser.id && !m.read
+                );
+
+                for (const msg of unreadMessages) {
+                    await markMessageAsRead(msg.id);
+                }
+            };
+
+            const markMessageAsRead = async (messageId) => {
+                try {
+                    await supabase
+                        .from('messages')
+                        .update({
+                            read: true,
+                            read_at: new Date().toISOString()
+                        })
+                        .eq('id', messageId);
+                } catch (error) {
+                    console.error('标记已读失败:', error);
+                }
+            };
+
+            // 滚动到底部
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            // 发送消息
+            const handleSendMessage = async () => {
+                if (!inputMessage.trim() || sending) return;
+
+                setSending(true);
+
+                try {
+                    // 调用Edge Function发送消息
+                    const { data, error } = await supabase.functions.invoke('send-message', {
+                        body: {
+                            targetUserId: selectedUser.id,
+                            text: inputMessage
+                        }
+                    });
+
+                    if (error) throw error;
+
+                    if (data.success) {
+                        setInputMessage('');
+                        
+                        // 更新金币
+                        if (data.coinsDeducted > 0) {
+                            setCurrentUser(prev => ({
+                                ...prev,
+                                coins: data.remainingCoins
+                            }));
+                        }
+                    }
+                } catch (error) {
+                    console.error('发送失败:', error);
+                    
+                    if (error.message.includes('TEMP_USER_LIMIT')) {
+                        setShowRegisterModal(true);
+                    } else if (error.message.includes('INSUFFICIENT_COINS')) {
+                        setShowCoinModal(true);
+                    } else {
+                        alert('发送失败：' + error.message);
+                    }
+                } finally {
+                    setSending(false);
+                }
+            };
+
+            // 注册
+            const handleRegister = async (username, password) => {
+                try {
+                    const passwordHash = await bcrypt.hash(password, 10);
+                    
+                    const { data, error } = await supabase.functions.invoke('register-user', {
+                        body: {
+                            username,
+                            passwordHash,
+                            tempId: currentUser?.tempId,
+                            tempData: currentUser
+                        }
+                    });
+
+                    if (error) throw error;
+
+                    alert('注册成功！已赠送6金币');
+                    setShowRegisterModal(false);
+                    
+                    // 刷新页面重新登录
+                    window.location.reload();
+                } catch (error) {
+                    alert('注册失败：' + error.message);
+                }
+            };
+
+            if (!currentUser) {
+                return <div style={{padding: '40px', textAlign: 'center', color: 'white'}}>正在加载...</div>;
+            }
+
+            return (
+                <div className="app-container">
+                    <Header 
+                        currentUser={currentUser} 
+                        onRegister={() => setShowRegisterModal(true)}
+                        onBuyCoins={() => setShowCoinModal(true)}
+                    />
+                    
+                    <div className="main-content">
+                        <UserList
+                            users={onlineUsers}
+                            selectedUser={selectedUser}
+                            onSelectUser={setSelectedUser}
+                            unreadCounts={unreadCounts}
+                        />
+                        
+                        <ChatArea
+                            currentUser={currentUser}
+                            selectedUser={selectedUser}
+                            messages={messages}
+                            inputMessage={inputMessage}
+                            sending={sending}
+                            onInputChange={setInputMessage}
+                            onSend={handleSendMessage}
+                            messagesEndRef={messagesEndRef}
+                        />
+                    </div>
+
+                    {showRegisterModal && (
+                        <RegisterModal
+                            onClose={() => setShowRegisterModal(false)}
+                            onRegister={handleRegister}
+                        />
+                    )}
+
+                    {showCoinModal && (
+                        <CoinModal
+                            onClose={() => setShowCoinModal(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // ========== 头部组件 ==========
+        function Header({ currentUser, onRegister, onBuyCoins }) {
+            return (
+                <div className="header">
+                    <div className="logo">
+                        💬 匿名聊天
+                    </div>
+                    <div className="user-info">
+                        <img src={currentUser.avatarUrl} alt="avatar" className="avatar" />
+                        <span style={{fontWeight: 600}}>{currentUser.username}</span>
+                        {!currentUser.isTemp && (
+                            <div className="coin-badge" onClick={onBuyCoins} style={{cursor: 'pointer'}}>
+                                🪙 {currentUser.coins}
+                            </div>
+                        )}
+                        {currentUser.isTemp && (
+                            <button className="btn btn-primary" onClick={onRegister}>
+                                注册
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // ========== 用户列表组件 ==========
+        function UserList({ users, selectedUser, onSelectUser, unreadCounts }) {
+            return (
+                <div className="user-list-container">
+                    <div className="user-list-header">
+                        <span>在线用户</span>
+                        <span>{users.length}</span>
+                    </div>
+                    <div className="user-grid">
+                        {users.map(user => (
+                            <div
+                                key={user.id}
+                                className={`user-card ${selectedUser?.id === user.id ? 'active' : ''}`}
+                                onClick={() => onSelectUser(user)}
+                            >
+                                <img src={user.avatarUrl} alt={user.username} className="avatar" />
+                                <div className="user-card-info">
+                                    <div className="user-name">{user.username}</div>
+                                    <div className="user-location">{user.location}</div>
+                                </div>
+                                {unreadCounts[user.id] > 0 && (
+                                    <div className="unread-badge">{unreadCounts[user.id]}</div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // ========== 聊天区域组件 ==========
+        function ChatArea({ currentUser, selectedUser, messages, inputMessage, sending, onInputChange, onSend, messagesEndRef }) {
+            if (!selectedUser) {
+                return (
+                    <div className="chat-container">
+                        <div className="empty-state">
+                            <div style={{fontSize: '48px', marginBottom: '20px'}}>💬</div>
+                            <div style={{fontSize: '18px', fontWeight: 600, marginBottom: '10px'}}>
+                                选择一个用户开始聊天
+                            </div>
+                            <div style={{fontSize: '14px'}}>
+                                点击左侧用户列表中的任意用户
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="chat-container">
+                    <div className="chat-header">
+                        <div className="chat-header-info">
+                            <img src={selectedUser.avatarUrl} alt={selectedUser.username} className="avatar" />
+                            <div>
+                                <div style={{fontWeight: 600}}>{selectedUser.username}</div>
+                                <div style={{fontSize: '12px', opacity: 0.8}}>{selectedUser.location}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="chat-messages">
+                        {messages.length === 0 ? (
+                            <div className="empty-state">
+                                <div style={{fontSize: '36px', marginBottom: '15px'}}>👋</div>
+                                <div>暂无消息，开始聊天吧！</div>
+                            </div>
+                        ) : (
+                            messages.map(msg => (
+                                <div
+                                    key={msg.id}
+                                    className={`message ${msg.sender_id === currentUser.id ? 'own' : ''}`}
+                                >
+                                    <img
+                                        src={msg.sender_id === currentUser.id ? currentUser.avatarUrl : selectedUser.avatarUrl}
+                                        alt="avatar"
+                                        className="avatar"
+                                    />
+                                    <div className="message-content">
+                                        <div className="message-bubble">{msg.text}</div>
+                                        <div className="message-time">
+                                            {new Date(msg.created_at).toLocaleTimeString('zh-CN', {
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                            {msg.sender_id === currentUser.id && (
+                                                <span>{msg.read ? '✓✓' : '✓'}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="chat-input-container">
+                        <input
+                            type="text"
+                            className="chat-input"
+                            placeholder="输入消息..."
+                            value={inputMessage}
+                            onChange={(e) => onInputChange(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && onSend()}
+                            disabled={sending}
+                        />
+                        <button
+                            className="send-btn"
+                            onClick={onSend}
+                            disabled={sending || !inputMessage.trim()}
+                        >
+                            {sending ? <span className="loading"></span> : '➤'}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========== 注册模态框 ==========
+        function RegisterModal({ onClose, onRegister }) {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async () => {
+                if (!username || !password) {
+                    alert('请填写完整信息');
+                    return;
+                }
+
+                if (username.length < 2 || username.length > 20) {
+                    alert('用户名长度应在2-20位之间');
+                    return;
+                }
+
+                if (password.length < 6) {
+                    alert('密码至少6位');
+                    return;
+                }
+
+                setLoading(true);
+                await onRegister(username, password);
+                setLoading(false);
+            };
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-title">注册账号</div>
+                        <div style={{color: '#666', marginBottom: '20px', fontSize: '14px'}}>
+                            注册即可保留聊天记录，并获得6金币奖励！
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">用户名</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                placeholder="2-20位，中文/字母/数字"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">密码</label>
+                            <input
+                                type="password"
+                                className="form-input"
+                                placeholder="至少6位"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                        </div>
+
+                        <div style={{display: 'flex', gap: '10px', marginTop: '25px'}}>
+                            <button
+                                className="btn btn-outline"
+                                onClick={onClose}
+                                style={{flex: 1}}
+                            >
+                                取消
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSubmit}
+                                disabled={loading}
+                                style={{flex: 1}}
+                            >
+                                {loading ? <span className="loading"></span> : '注册'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========== 充值模态框 ==========
+        function CoinModal({ onClose }) {
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-title">购买金币</div>
+                        <div style={{color: '#666', marginBottom: '10px', fontSize: '14px'}}>
+                            金币用于发送消息（超过免费额度后）
+                        </div>
+
+                        <div className="package-grid">
+                            <div className="package-card">
+                                <div className="package-coins">300 🪙</div>
+                                <div className="package-price">¥3</div>
+                            </div>
+                            <div className="package-card popular">
+                                <div className="popular-badge">最受欢迎</div>
+                                <div className="package-coins">600 🪙</div>
+                                <div className="package-price">¥5</div>
+                            </div>
+                            <div className="package-card">
+                                <div className="package-coins">1500 🪙</div>
+                                <div className="package-price">¥10</div>
+                            </div>
+                        </div>
+
+                        <div style={{marginTop: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '10px', fontSize: '13px', color: '#666'}}>
+                            💡 提示：注册用户每人与每个用户前5条消息免费，之后每条消息消耗2金币
+                        </div>
+
+                        <button
+                            className="btn btn-outline"
+                            onClick={onClose}
+                            style={{width: '100%', marginTop: '20px'}}
+                        >
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========== 渲染应用 ==========
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
