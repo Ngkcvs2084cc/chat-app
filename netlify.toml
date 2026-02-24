@@ -7,5 +7,5 @@
 
 [[redirects]]
   from = "/*"
-  to = "/beautiful-secure-version.html"
+  to = "/index.html"
   status = 200
