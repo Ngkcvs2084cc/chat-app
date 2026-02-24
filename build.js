@@ -9,8 +9,11 @@ const htmlPath = path.join(__dirname, 'public', 'beautiful-secure-version.html')
 let html = fs.readFileSync(htmlPath, 'utf8');
 
 // 从环境变量获取配置
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_KEY';
+// const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'YOUR_SUPABASE_URL';
+// const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_KEY';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jekcgyklvptniqdhgtbe.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impla2NneWtsdnB0bmlxZGhndGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDY3NjEsImV4cCI6MjA4NzQyMjc2MX0.mtlOeZmEyXqSZnxsGg0zbAlFr_IPYSbmYl8mYvJAfHw';
 
 console.log('📝 配置信息:');
 console.log(`   Supabase URL: ${supabaseUrl.substring(0, 30)}...`);
