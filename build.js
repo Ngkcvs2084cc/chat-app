@@ -5,7 +5,8 @@ const path = require('path');
 console.log('🔨 开始构建...');
 
 // 读取HTML文件
-const htmlPath = path.join(__dirname, 'public', 'index.html');
+// const htmlPath = path.join(__dirname, 'public', 'index.html');
+const htmlPath = path.join(__dirname, 'public', 'beautiful-secure-version.html');
 let html = fs.readFileSync(htmlPath, 'utf8');
 
 // 从环境变量获取配置
