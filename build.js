@@ -4,8 +4,7 @@ const path = require('path');
 
 console.log('🔨 开始构建...');
 
-// 读取HTML文件
-// const htmlPath = path.join(__dirname, 'public', 'index.html');
+// 读取HTML文件（使用Beautiful版本）
 const htmlPath = path.join(__dirname, 'public', 'beautiful-secure-version.html');
 let html = fs.readFileSync(htmlPath, 'utf8');
 
