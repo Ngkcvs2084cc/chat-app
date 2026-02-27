@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>匿名聊天系统 - 完整版</title>
+    
+    <!-- React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- bcrypt -->
+    <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .app-container { height: 100vh; display: flex; flex-direction: column; }
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+            object-fit: cover;
+        }
+        .coin-badge {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .btn-primary:hover { transform: translateY(-2px); }
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            padding: 10px;
+            gap: 10px;
+        }
+        @media (min-width: 769px) {
+            .main-content { flex-direction: row; }
+            .user-list-container { width: 280px; }
+            .chat-container { flex: 1; }
+        }
+        @media (max-width: 768px) {
+            .main-content { flex-direction: column; }
+            .user-list-container { height: 35vh; }
+            .chat-container { flex: 1; }
+        }
+        .user-list-container, .chat-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .user-list-header, .chat-header {
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: 600;
+        }
+        .user-grid {
+            display: grid;
+            gap: 10px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        @media (min-width: 769px) {
+            .user-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 768px) {
+            .user-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+        }
+        .user-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+        }
+        .user-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .user-card.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .user-name { font-weight: 600; font-size: 14px; }
+        .user-location { font-size: 12px; opacity: 0.7; }
+        .online-badge {
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            box-shadow: 0 0 6px #00ff00;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        .message {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.own { flex-direction: row-reverse; }
+        .message .avatar { width: 36px; height: 36px; }
+        .message-bubble {
+            padding: 10px 15px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            word-wrap: break-word;
+            max-width: 60%;
+        }
+        .message.own .message-bubble {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .chat-input-container {
+            padding: 15px 20px;
+            background: white;
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 24px;
+            outline: none;
+        }
+        .chat-input:focus { border-color: #667eea; }
+        .send-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+        }
+        .send-btn:hover:not(:disabled) { transform: scale(1.1); }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+        }
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; margin-bottom: 8px; font-weight: 600; }
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            outline: none;
+        }
+        .form-input:focus { border-color: #667eea; }
+        .package-grid { display: grid; gap: 15px; margin-top: 20px; }
+        .package-card {
+            padding: 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .package-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        .package-coins { font-size: 32px; font-weight: 700; color: #667eea; }
+        .package-price { font-size: 18px; color: #999; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Supabase配置
+        const SUPABASE_URL = 'https://jekcgyklvptniqdhgtbe.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impla2NneWtsdnB0bmlxZGhndGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDY3NjEsImV4cCI6MjA4NzQyMjc2MX0.mtlOeZmEyXqSZnxsGg0zbAlFr_IPYSbmYl8mYvJAfHw';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        function App() {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [onlineUsers, setOnlineUsers] = useState([]);
+            const [selectedUser, setSelectedUser] = useState(null);
+            const [messages, setMessages] = useState([]);
+            const [inputMessage, setInputMessage] = useState('');
+            const [sending, setSending] = useState(false);
+            const [showRegisterModal, setShowRegisterModal] = useState(false);
+            const [showCoinModal, setShowCoinModal] = useState(false);
+            const messagesEndRef = useRef(null);
+
+            useEffect(() => {
+                initUser();
+            }, []);
+
+            const initUser = async () => {
+                const randomNum = Math.floor(Math.random() * 9999);
+                const tempUser = {
+                    id: `temp_${Date.now()}`,
+                    tempId: `temp_${Date.now()}`,
+                    username: `游客${randomNum}`,
+                    gender: Math.random() > 0.5 ? 'male' : 'female',
+                    avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${randomNum}`,
+                    location: '在线',
+                    coins: 0,
+                    isTemp: true
+                };
+                setCurrentUser(tempUser);
+            };
+
+            useEffect(() => {
+                if (!currentUser) return;
+
+                const fetchOnlineUsers = async () => {
+                    const { data } = await supabase
+                        .from('users')
+                        .select('id, username, gender, avatar_url, location')
+                        .limit(10);
+
+                    setOnlineUsers((data || []).map(u => ({
+                        ...u,
+                        avatarUrl: u.avatar_url
+                    })));
+                };
+
+                fetchOnlineUsers();
+            }, [currentUser]);
+
+            useEffect(() => {
+                if (!currentUser || !selectedUser) return;
+
+                const chatId = [currentUser.id, selectedUser.id].sort().join('_');
+
+                const loadMessages = async () => {
+                    const { data } = await supabase
+                        .from('messages')
+                        .select('*')
+                        .eq('chat_id', chatId)
+                        .order('created_at', { ascending: true });
+
+                    setMessages(data || []);
+                };
+
+                loadMessages();
+
+                const subscription = supabase
+                    .channel('messages')
+                    .on('postgres_changes', {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'messages',
+                        filter: `chat_id=eq.${chatId}`
+                    }, (payload) => {
+                        setMessages(prev => [...prev, payload.new]);
+                    })
+                    .subscribe();
+
+                return () => {
+                    subscription.unsubscribe();
+                };
+            }, [currentUser, selectedUser]);
+
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            const handleSendMessage = async () => {
+                if (!inputMessage.trim() || sending || !selectedUser) return;
+
+                setSending(true);
+
+                try {
+                    // 调用数据库函数发送消息
+                    const { data, error } = await supabase.rpc('send_message_with_limits', {
+                        p_sender_id: currentUser.id,
+                        p_receiver_id: selectedUser.id,
+                        p_text: inputMessage.trim()
+                    });
+
+                    if (error) throw error;
+
+                    if (data.success) {
+                        setInputMessage('');
+                        
+                        // 更新金币
+                        if (data.coinsDeducted > 0) {
+                            setCurrentUser(prev => ({
+                                ...prev,
+                                coins: data.remainingCoins
+                            }));
+                        }
+                    } else {
+                        // 处理错误
+                        if (data.error === 'TEMP_USER_LIMIT') {
+                            alert(data.message);
+                            setShowRegisterModal(true);
+                        } else if (data.error === 'INSUFFICIENT_COINS') {
+                            alert(data.message);
+                            setShowCoinModal(true);
+                        } else {
+                            alert(data.message);
+                        }
+                    }
+                } catch (error) {
+                    console.error('发送失败:', error);
+                    alert('发送失败：' + error.message);
+                } finally {
+                    setSending(false);
+                }
+            };
+
+            const handleRegister = async (username, password) => {
+                try {
+                    const passwordHash = await bcrypt.hash(password, 10);
+                    
+                    const { data, error } = await supabase.rpc('register_user', {
+                        p_username: username,
+                        p_password_hash: passwordHash,
+                        p_temp_id: currentUser?.tempId,
+                        p_gender: currentUser?.gender,
+                        p_avatar_url: currentUser?.avatarUrl,
+                        p_location: currentUser?.location
+                    });
+
+                    if (error) throw error;
+
+                    if (data.success) {
+                        alert('注册成功！已赠送6金币');
+                        setShowRegisterModal(false);
+                        window.location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                } catch (error) {
+                    alert('注册失败：' + error.message);
+                }
+            };
+
+            if (!currentUser) {
+                return <div style={{padding: '40px', textAlign: 'center', color: 'white'}}>正在加载...</div>;
+            }
+
+            return (
+                <div className="app-container">
+                    <Header 
+                        currentUser={currentUser} 
+                        onRegister={() => setShowRegisterModal(true)}
+                        onBuyCoins={() => setShowCoinModal(true)}
+                    />
+                    
+                    <div className="main-content">
+                        <UserList
+                            users={onlineUsers}
+                            selectedUser={selectedUser}
+                            onSelectUser={setSelectedUser}
+                        />
+                        
+                        <ChatArea
+                            currentUser={currentUser}
+                            selectedUser={selectedUser}
+                            messages={messages}
+                            inputMessage={inputMessage}
+                            sending={sending}
+                            onInputChange={setInputMessage}
+                            onSend={handleSendMessage}
+                            messagesEndRef={messagesEndRef}
+                        />
+                    </div>
+
+                    {showRegisterModal && (
+                        <RegisterModal
+                            onClose={() => setShowRegisterModal(false)}
+                            onRegister={handleRegister}
+                        />
+                    )}
+
+                    {showCoinModal && (
+                        <CoinModal onClose={() => setShowCoinModal(false)} />
+                    )}
+                </div>
+            );
+        }
+
+        function Header({ currentUser, onRegister, onBuyCoins }) {
+            return (
+                <div className="header">
+                    <div className="logo">💬 匿名聊天（完整版）</div>
+                    <div className="user-info">
+                        <img src={currentUser.avatarUrl} alt="avatar" className="avatar" />
+                        <span style={{fontWeight: 600}}>{currentUser.username}</span>
+                        {!currentUser.isTemp && (
+                            <div className="coin-badge" onClick={onBuyCoins}>
+                                🪙 {currentUser.coins}
+                            </div>
+                        )}
+                        {currentUser.isTemp && (
+                            <button className="btn btn-primary" onClick={onRegister}>
+                                注册
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function UserList({ users, selectedUser, onSelectUser }) {
+            return (
+                <div className="user-list-container">
+                    <div className="user-list-header">
+                        <span>在线用户</span>
+                        <span>{users.length}</span>
+                    </div>
+                    <div className="user-grid">
+                        {users.map(user => (
+                            <div
+                                key={user.id}
+                                className={`user-card ${selectedUser?.id === user.id ? 'active' : ''}`}
+                                onClick={() => onSelectUser(user)}
+                            >
+                                <img src={user.avatarUrl} alt={user.username} className="avatar" />
+                                <div>
+                                    <div className="user-name">{user.username}</div>
+                                    <div className="user-location">{user.location}</div>
+                                </div>
+                                <div className="online-badge"></div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function ChatArea({ currentUser, selectedUser, messages, inputMessage, sending, onInputChange, onSend, messagesEndRef }) {
+            if (!selectedUser) {
+                return (
+                    <div className="chat-container">
+                        <div className="empty-state">
+                            <div style={{fontSize: '48px', marginBottom: '20px'}}>💬</div>
+                            <div>选择一个用户开始聊天</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="chat-container">
+                    <div className="chat-header">
+                        与 {selectedUser.username} 聊天
+                    </div>
+
+                    <div className="chat-messages">
+                        {messages.length === 0 ? (
+                            <div className="empty-state">
+                                <div style={{fontSize: '36px', marginBottom: '15px'}}>👋</div>
+                                <div>暂无消息，开始聊天吧！</div>
+                            </div>
+                        ) : (
+                            messages.map(msg => (
+                                <div
+                                    key={msg.id}
+                                    className={`message ${msg.sender_id === currentUser.id ? 'own' : ''}`}
+                                >
+                                    <img
+                                        src={msg.sender_id === currentUser.id ? currentUser.avatarUrl : selectedUser.avatarUrl}
+                                        alt="avatar"
+                                        className="avatar"
+                                    />
+                                    <div>
+                                        <div className="message-bubble">{msg.text}</div>
+                                        <div className="message-time">
+                                            {new Date(msg.created_at).toLocaleTimeString('zh-CN', {
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="chat-input-container">
+                        <input
+                            type="text"
+                            className="chat-input"
+                            placeholder="输入消息..."
+                            value={inputMessage}
+                            onChange={(e) => onInputChange(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && onSend()}
+                            disabled={sending}
+                        />
+                        <button
+                            className="send-btn"
+                            onClick={onSend}
+                            disabled={sending || !inputMessage.trim()}
+                        >
+                            ➤
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        function RegisterModal({ onClose, onRegister }) {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async () => {
+                if (!username || !password) {
+                    alert('请填写完整信息');
+                    return;
+                }
+                if (username.length < 2 || username.length > 20) {
+                    alert('用户名长度应在2-20位之间');
+                    return;
+                }
+                if (password.length < 6) {
+                    alert('密码至少6位');
+                    return;
+                }
+
+                setLoading(true);
+                await onRegister(username, password);
+                setLoading(false);
+            };
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-title">注册账号</div>
+                        <div style={{color: '#666', marginBottom: '20px'}}>
+                            注册即可保留聊天记录，并获得6金币奖励！
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">用户名</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                placeholder="2-20位"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">密码</label>
+                            <input
+                                type="password"
+                                className="form-input"
+                                placeholder="至少6位"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                        </div>
+
+                        <div style={{display: 'flex', gap: '10px', marginTop: '25px'}}>
+                            <button className="btn" onClick={onClose} style={{flex: 1, background: '#e9ecef'}}>
+                                取消
+                            </button>
+                            <button className="btn btn-primary" onClick={handleSubmit} disabled={loading} style={{flex: 1}}>
+                                {loading ? '注册中...' : '注册'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function CoinModal({ onClose }) {
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-title">购买金币</div>
+                        <div className="package-grid">
+                            <div className="package-card">
+                                <div className="package-coins">300 🪙</div>
+                                <div className="package-price">¥3</div>
+                            </div>
+                            <div className="package-card">
+                                <div className="package-coins">600 🪙</div>
+                                <div className="package-price">¥5</div>
+                            </div>
+                            <div className="package-card">
+                                <div className="package-coins">1500 🪙</div>
+                                <div className="package-price">¥10</div>
+                            </div>
+                        </div>
+                        <div style={{marginTop: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '10px', fontSize: '13px'}}>
+                            💡 提示：每人与每个用户前5条消息免费，之后每条消息消耗2金币
+                        </div>
+                        <button className="btn" onClick={onClose} style={{width: '100%', marginTop: '20px', background: '#e9ecef'}}>
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
