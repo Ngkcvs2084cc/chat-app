@@ -13,10 +13,10 @@
 
 const SUPABASE_CONFIG = {
   // 项目URL - 格式：https://你的项目ID.supabase.co
-  url: 'https://pvuhfhaijgdvasfwempf.supabase.co',
+  url: 'https://dhkgvdhtmbwqiyrzrlig.supabase.co',
   
   // 匿名公钥 - 一长串字符
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dWhmaGFpamdkdmFzZndlbXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyODU5NzYsImV4cCI6MjA4Nzg2MTk3Nn0.CgyiSoPJIaomGf6RlU31Cu6k5UKCENYmgAnkHcOs1jw'
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoa2d2ZGh0bWJ3cWl5cnpybGlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyODk5MzUsImV4cCI6MjA4Nzg2NTkzNX0.vrbYqP0QiE8QIU5DuLy7z4s0ZAusWvtiU18PFQrwZ8s'
 };
 
 // 导出配置（用于在HTML中引用）
