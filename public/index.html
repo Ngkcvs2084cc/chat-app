@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>匿名聊天系统</title>
     
-    <!-- Firebase SDK -->
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
     <script src="config.js"></script>
-    <script src="supabase-adapter.js"></script>
     
     <!-- React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -938,8 +937,72 @@
     
     <script type="text/babel">
         // ==================== Supabase配置 ====================
-        const supabase = initSupabase(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-        const db = new SupabaseAdapter(supabase);
+        const SUPABASE_URL = window.SUPABASE_CONFIG?.url || 'YOUR_SUPABASE_URL';
+        const SUPABASE_KEY = window.SUPABASE_CONFIG?.anonKey || 'YOUR_SUPABASE_KEY';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // Supabase适配器（简化版，内联）
+        const db = {
+            async loginUser(username, password, location) {
+                const { data, error } = await supabase.rpc('login_user', {
+                    p_username: username, p_password: password, p_location: location
+                });
+                return error ? { success: false, error: error.message } : data;
+            },
+            async registerUser(username, password, tempId, gender, avatarUrl, location, sentCounts) {
+                const { data, error } = await supabase.rpc('register_user', {
+                    p_username: username, p_password: password, p_temp_id: tempId,
+                    p_gender: gender, p_avatar_url: avatarUrl, p_location: location,
+                    p_sent_counts: sentCounts || {}
+                });
+                return error ? { success: false, error: error.message } : data;
+            },
+            async sendMessage(senderId, receiverId, text, isTemp) {
+                const { data, error } = await supabase.rpc('send_message_with_limits', {
+                    p_sender_id: senderId, p_receiver_id: receiverId, 
+                    p_text: text, p_is_temp: isTemp
+                });
+                return error ? { success: false, error: error.message } : data;
+            },
+            async rechargeCoins(userId, orderId, coins, amount) {
+                const { data, error } = await supabase.rpc('recharge_coins', {
+                    p_user_id: userId, p_order_id: orderId, 
+                    p_coins: coins, p_amount: amount
+                });
+                return error ? { success: false, error: error.message } : data;
+            },
+            async updateHeartbeat(userId) {
+                await supabase.from('online_users').update({
+                    last_seen: new Date().toISOString(), is_online: true
+                }).eq('id', userId);
+            },
+            async setOffline(userId) {
+                await supabase.from('online_users').update({
+                    is_online: false, last_seen: new Date().toISOString()
+                }).eq('id', userId);
+            },
+            async adminLogin(username, password) {
+                const { data, error } = await supabase.rpc('admin_login', {
+                    p_username: username, p_password: password
+                });
+                return error ? { success: false } : data;
+            },
+            async banUser(userId, banned) {
+                const { error } = await supabase.rpc('ban_user', {
+                    p_user_id: userId, p_banned: banned
+                });
+                return { success: !error };
+            },
+            async updateUserCoins(userId, coins) {
+                const { error } = await supabase.rpc('admin_update_coins', {
+                    p_user_id: userId, p_coins: coins
+                });
+                return { success: !error };
+            },
+            generateChatId(id1, id2) {
+                return [id1, id2].sort().join('_');
+            }
+        };
         
         const { useState, useEffect, useRef } = React;
         
@@ -998,35 +1061,19 @@
           const heartbeatIntervalRef = useRef(null);
           
           useEffect(() => {
-            // Supabase始终连接
-            setIsConnected(true);
-            
-            initializeUser();
-            checkPaymentCallback();
-            
-            return () => {
-              if (heartbeatIntervalRef.current) {
-                clearInterval(heartbeatIntervalRef.current);
-              }
-              connectedRef.off();
+            setIsConnected(true); // Supabase always connected
             };
           }, []);
           
           useEffect(() => {
-            if (currentUser) {
-              const userId = currentUser.id || currentUser.tempId;
-              
+            if (currentUser && isConnected) {
               heartbeatIntervalRef.current = setInterval(() => {
-                db.updateHeartbeat(userId);
+                const userId = currentUser.id || currentUser.tempId;
+                /* Converted to Supabase */.update({
+                  lastSeen: Date.now(),
+                  isOnline: true
+                });
               }, 10000);
-              
-              return () => {
-                if (heartbeatIntervalRef.current) {
-                  clearInterval(heartbeatIntervalRef.current);
-                }
-              };
-            }
-          }, [currentUser]);
               
               return () => {
                 if (heartbeatIntervalRef.current) {
@@ -1053,25 +1100,29 @@
           
           const handlePaymentSuccess = async (orderData) => {
             const session = LocalSession.get();
-            if (!session || session.isTemp) return;
-            
-            const result = await db.rechargeCoins(
-              session.id,
-              orderData.orderId,
-              orderData.coins,
-              orderData.amount
-            );
-            
-            if (!result.success) {
-              alert('充值处理失败');
-              return;
+            if (session && !session.isTemp) {
+              session.coins += orderData.coins;
+              
+              if (!session.rechargeHistory) {
+                session.rechargeHistory = [];
+              }
+              session.rechargeHistory.push({
+                coins: orderData.coins,
+                amount: orderData.amount,
+                timestamp: Date.now(),
+                orderId: orderData.orderId
+              });
+              
+              await /* Converted to Supabase */.update({
+                coins: session.coins,
+                rechargeHistory: session.rechargeHistory
+              });
+              
+              LocalSession.save(session);
+              setCurrentUser(session);
+              
+              alert(`充值成功！获得${orderData.coins}金币`);
             }
-            
-            session.coins = result.newBalance;
-            LocalSession.save(session);
-            setCurrentUser(session);
-            
-            alert(`充值成功！获得${orderData.coins}金币`);
           };
           
           const initializeUser = async () => {
@@ -1102,61 +1153,131 @@
             setCurrentUser(session);
             
             const userId = session.id || session.tempId;
-            await db.updateOnlineStatus(userId, {
-              username: session.username,
-              gender: session.gender,
-              avatarUrl: session.avatarUrl,
-              location: session.location,
-              coins: session.coins,
-              isTemp: session.isTemp
+            await /* Converted to Supabase */.set({
+              ...session,
+              isOnline: true,
+              lastSeen: Date.now()
             });
           };
           
           const handleLogout = async () => {
             if (window.confirm('确定要退出吗？')) {
               const userId = currentUser.id || currentUser.tempId;
-              await db.setOffline(userId);
+              await /* Converted to Supabase */.update({
+                isOnline: false,
+                lastSeen: Date.now()
+              });
+              LocalSession.clear();
+              window.location.reload();
+            }
+          };
           
           const handleLogin = async (username, password) => {
-            const result = await db.loginUser(username, password, currentUser.location);
+            const usersSnapshot = await /* Converted to Supabase */.once('value');
+            const usersData = usersSnapshot.val() || {};
+            const user = Object.values(usersData).find(u => u.username === username && u.password === password);
             
-            if (!result.success) {
-              alert(result.error || '登录失败');
-              return;
+            if (user) {
+              if (!user.loginHistory) user.loginHistory = [];
+              user.loginHistory.push({
+                timestamp: Date.now(),
+                location: currentUser.location
+              });
+              
+              if (!user.sentMessageCounts) user.sentMessageCounts = {};
+              
+              await /* Converted to Supabase */.update(user);
+              LocalSession.save(user);
+              setCurrentUser(user);
+              setShowLoginModal(false);
+              
+              await /* Converted to Supabase */.remove();
+              await /* Converted to Supabase */.set({
+                ...user,
+                isOnline: true,
+                lastSeen: Date.now()
+              });
+              
+              alert('登录成功！');
+            } else {
+              alert('用户名或密码错误！');
             }
-            
-            const user = result.user;
-            
-            // 保存Session
-            LocalSession.save(user);
-            setCurrentUser(user);
-            setShowLoginModal(false);
-            
-            alert('登录成功！');
           };
           
           // 【核心修复】注册并保留聊天记录
           const handleRegister = async (username, password) => {
-            const result = await db.registerUser(
-              username,
-              password,
-              currentUser.tempId,
-              currentUser.gender,
-              currentUser.avatarUrl,
-              currentUser.location,
-              currentUser.sentMessageCounts || {}
-            );
-            
-            if (!result.success) {
-              alert(result.error || '注册失败');
-              return;
+            try {
+              const usersSnapshot = await /* Converted to Supabase */.once('value');
+              const usersData = usersSnapshot.val() || {};
+              
+              if (Object.values(usersData).find(u => u.username === username)) {
+                alert('用户名已存在！');
+                return;
+              }
+              
+              const keepChatHistory = username === currentUser.username;
+              const oldTempId = currentUser.tempId;
+              
+              const newUser = {
+                id: `user_${Date.now()}`,
+                username,
+                password,
+                gender: currentUser.gender,
+                avatarUrl: currentUser.avatarUrl,
+                location: currentUser.location,
+                isTemp: false,
+                coins: 6,
+                registeredAt: Date.now(),
+                loginHistory: [{ timestamp: Date.now(), location: currentUser.location }],
+                rechargeHistory: [],
+                sentMessageCounts: keepChatHistory ? (currentUser.sentMessageCounts || {}) : {}
+              };
+              
+              // 【关键修复】保留聊天记录
+              if (keepChatHistory && oldTempId) {
+                const chatsSnapshot = await /* Converted to Supabase */.once('value');
+                const allChats = chatsSnapshot.val() || {};
+                
+                for (const [oldChatId, chatData] of Object.entries(allChats)) {
+                  if (oldChatId.includes(oldTempId)) {
+                    const otherUserId = extractOtherUserId(oldChatId, oldTempId);
+                    if (!otherUserId) continue;
+                    
+                    const newChatId = [newUser.id, otherUserId].sort().join('_');
+                    
+                    const updatedMessages = {};
+                    Object.entries(chatData).forEach(([msgId, msg]) => {
+                      updatedMessages[msgId] = {
+                        ...msg,
+                        sender: msg.sender === oldTempId ? newUser.id : msg.sender
+                      };
+                    });
+                    
+                    await /* Converted to Supabase */.set(updatedMessages);
+                    await /* Converted to Supabase */.remove();
+                  }
+                }
+              }
+              
+              await /* Converted to Supabase */.set(newUser);
+              await /* Converted to Supabase */.remove();
+              await /* Converted to Supabase */.set({
+                ...newUser,
+                isOnline: true,
+                lastSeen: Date.now()
+              });
+              
+              LocalSession.save(newUser);
+              setCurrentUser(newUser);
+              setShowRegisterModal(false);
+              
+              alert(`注册成功！${keepChatHistory ? '已保留聊天记录。' : ''}已赠送6金币！`);
+              setTimeout(() => window.location.reload(), 1000);
+              
+            } catch (error) {
+              console.error('注册错误:', error);
+              alert('注册失败，请重试！');
             }
-            
-            alert('注册成功！已赠送6金币');
-            setShowRegisterModal(false);
-            
-            // 刷新页面
-            window.location.reload();
           };
           
           if (!currentUser) {
@@ -1362,41 +1483,67 @@
           const typingTimeoutRef = useRef(null);
           
           useEffect(() => {
-            if (!currentUser) return;
-            
-            const userId = currentUser.id || currentUser.tempId;
-            
-            const unsubscribe = db.subscribeToOnlineUsers((users) => {
-              const filteredUsers = users.filter(u => u.id !== userId);
-              setOnlineUsers(filteredUsers);
+            const onlineRef = /* Converted to Supabase */;
+            const unsubscribe = onlineRef.on('value', (snapshot) => {
+              const data = snapshot.val() || {};
+              const currentUserId = currentUser.id || currentUser.tempId;
+              const users = Object.values(data).filter(u => {
+                const userId = u.id || u.tempId;
+                return userId !== currentUserId;
+              });
+              setOnlineUsers(users);
             });
             
-            return () => {
-              unsubscribe();
-            };
+            return () => onlineRef.off('value', unsubscribe);
           }, [currentUser]);
           
           useEffect(() => {
-            if (!selectedUser || !currentUser) return;
-            
-            const userId = currentUser.id || currentUser.tempId;
-            const chatId = db.generateChatId(userId, selectedUser.id);
-            
-            const unsubscribe = db.subscribeToMessages(chatId, (messages) => {
-              setMessages(messages);
-              scrollToBottom();
-            });
-            
-            return () => {
-              unsubscribe();
-            };
+            if (selectedUser) {
+              const chatId = getChatId(currentUser, selectedUser);
+              
+              const messagesRef = /* Converted to Supabase */;
+              const msgUnsubscribe = messagesRef.on('value', (snapshot) => {
+                const data = snapshot.val() || {};
+                const msgs = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
+                setMessages(msgs);
+                
+                const currentUserId = currentUser.id || currentUser.tempId;
+                msgs.forEach(msg => {
+                  if (msg.sender !== currentUserId && !msg.read) {
+                    /* Converted to Supabase */.update({
+                      read: true,
+                      readAt: Date.now()
+                    });
+                  }
+                });
+                
+                const otherUserId = selectedUser.id || selectedUser.tempId;
+                setUnreadCounts(prev => {
+                  const newCounts = { ...prev };
+                  delete newCounts[otherUserId];
+                  return newCounts;
+                });
+              });
+              
+              const typingRef = /* Converted to Supabase */;
+              const typingUnsubscribe = typingRef.on('value', (snapshot) => {
+                const data = snapshot.val() || {};
+                const otherUserId = selectedUser.id || selectedUser.tempId;
+                setIsTyping(data[otherUserId] === true);
+              });
+              
+              return () => {
+                messagesRef.off('value', msgUnsubscribe);
+                typingRef.off('value', typingUnsubscribe);
+              };
+            }
           }, [selectedUser, currentUser]);
           
           // 【核心修复】监听未读消息
           useEffect(() => {
             const currentUserId = currentUser.id || currentUser.tempId;
             
-            const chatsRef = db.ref('chats');
+            const chatsRef = /* Converted to Supabase */;
             const unreadListener = chatsRef.on('value', (snapshot) => {
               const allChats = snapshot.val() || {};
               const newUnreadCounts = {};
@@ -1444,13 +1591,13 @@
             
             const chatId = getChatId(currentUser, selectedUser);
             const userId = currentUser.id || currentUser.tempId;
-            db.ref(`typing/${chatId}/${userId}`).set(true);
+            /* Converted to Supabase */.set(true);
             
             if (typingTimeoutRef.current) {
               clearTimeout(typingTimeoutRef.current);
             }
             typingTimeoutRef.current = setTimeout(() => {
-              db.ref(`typing/${chatId}/${userId}`).remove();
+              /* Converted to Supabase */.remove();
             }, 3000);
           };
           
@@ -1471,41 +1618,51 @@
           };
           
           const handleSendMessage = async () => {
-            if (!inputMessage.trim() || !selectedUser || !currentUser) return;
+            if (!inputMessage.trim() || !selectedUser) return;
             
-            setIsTyping(false);
+            const targetUserId = selectedUser.id || selectedUser.tempId;
+            const sentCount = getSentMessageCount(targetUserId);
             
-            const userId = currentUser.id || currentUser.tempId;
-            
-            const result = await db.sendMessage(
-              userId,
-              selectedUser.id,
-              inputMessage.trim(),
-              currentUser.isTemp || false
-            );
-            
-            if (!result.success) {
-              if (result.error === 'TEMP_USER_LIMIT') {
-                alert(result.message);
-                onShowRegister();
-              } else if (result.error === 'INSUFFICIENT_COINS') {
-                alert(result.message);
-              } else {
-                alert(result.message || '发送失败');
-              }
+            if (sentCount >= 5 && currentUser.isTemp) {
+              onShowRegister();
               return;
             }
             
-            // 更新金币
-            if (result.remainingCoins !== undefined) {
-              const session = LocalSession.get();
-              if (session) {
-                session.coins = result.remainingCoins;
-                LocalSession.save(session);
-                setCurrentUser(session);
+            if (sentCount >= 5 && !currentUser.isTemp) {
+              if (currentUser.coins < 2) {
+                alert('金币不足，请充值！');
+                return;
               }
+              currentUser.coins -= 2;
             }
             
+            const chatId = getChatId(currentUser, selectedUser);
+            const currentUserId = currentUser.id || currentUser.tempId;
+            const newMessage = {
+              id: `msg_${Date.now()}`,
+              sender: currentUserId,
+              text: inputMessage,
+              timestamp: Date.now(),
+              read: false
+            };
+            
+            await /* Converted to Supabase */.set(newMessage);
+            await /* Converted to Supabase */.remove();
+            
+            if (!currentUser.sentMessageCounts) {
+              currentUser.sentMessageCounts = {};
+            }
+            currentUser.sentMessageCounts[targetUserId] = sentCount + 1;
+            
+            if (!currentUser.isTemp) {
+              await /* Converted to Supabase */.update({
+                coins: currentUser.coins,
+                sentMessageCounts: currentUser.sentMessageCounts
+              });
+            }
+            
+            LocalSession.save(currentUser);
+            setCurrentUser({ ...currentUser });
             setInputMessage('');
           };
           
