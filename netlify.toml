@@ -1,6 +1,6 @@
 [[redirects]]
   from = "/*"
-  to = "/public/beautiful-complete-zero-install.html"
+  to = "/public/index.html"
   status = 200
 
 [build]
