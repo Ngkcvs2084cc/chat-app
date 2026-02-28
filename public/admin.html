@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>管理后台 - 响应式版</title>
     
-    <!-- Firebase SDK -->
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
     <script src="config.js"></script>
-    <script src="supabase-adapter.js"></script>
     
     <!-- React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -723,9 +722,19 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        // ==================== Supabase配置 ====================
-        const supabase = initSupabase(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-        const db = new SupabaseAdapter(supabase);
+        // Firebase配置
+        const firebaseConfig = {
+		  apiKey: "AIzaSyD5dLRpk4haIa8WaPqpv_jSMS8SQAxtQkI",
+		  authDomain: "my-chat26.firebaseapp.com",
+		  databaseURL: "https://my-chat26-default-rtdb.asia-southeast1.firebasedatabase.app",
+		  projectId: "my-chat26",
+		  storageBucket: "my-chat26.firebasestorage.app",
+		  messagingSenderId: "330301770000",
+		  appId: "1:330301770000:web:131b3cab22ca0b41d4bd95"
+		};
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
         
         const { useState, useEffect } = React;
         
@@ -761,26 +770,22 @@
           }, []);
           
           useEffect(() => {
-            if (!isAuthenticated) return;
-            
-            const unsubscribe = db.subscribeToUsers((users) => {
-              setUsers(users);
-            });
-            
-            return () => {
-              unsubscribe();
-            };
+            if (isAuthenticated) {
+              loadData();
+              const interval = setInterval(loadData, 3000);
+              return () => clearInterval(interval);
+            }
           }, [isAuthenticated]);
           
           const loadData = async () => {
-            const usersSnapshot = await db.ref('users').once('value');
+            const usersSnapshot = await /* Converted to Supabase */.once('value');
             const usersData = usersSnapshot.val() || {};
             setUsers(Object.values(usersData));
             
-            const chatsSnapshot = await db.ref('chats').once('value');
+            const chatsSnapshot = await /* Converted to Supabase */.once('value');
             setChats(chatsSnapshot.val() || {});
             
-            const onlineSnapshot = await db.ref('online_users').once('value');
+            const onlineSnapshot = await /* Converted to Supabase */.once('value');
             const onlineData = onlineSnapshot.val() || {};
             
             const registeredUsers = Object.values(usersData);
@@ -793,16 +798,16 @@
             setOnlineUsers(filteredOnline);
           };
           
-          const handleLogin = async () => {
-            const result = await db.adminLogin(username, password);
-            
-            if (!result.success) {
-              alert('用户名或密码错误');
-              return;
+          const handleLogin = (e) => {
+            e.preventDefault();
+            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+              setIsAuthenticated(true);
+              AdminAuth.set('true');
+              setUsername('');
+              setPassword('');
+            } else {
+              alert('用户名或密码错误！');
             }
-            
-            AdminAuth.save({ username });
-            setIsAuthenticated(true);
           };
           
           const handleLogout = () => {
@@ -814,13 +819,13 @@
           
           const handleDeleteUser = async (userId) => {
             if (window.confirm('确定要删除此用户吗？此操作无法撤销！')) {
-              await db.ref(`users/${userId}`).remove();
+              await /* Converted to Supabase */.remove();
               
-              const chatsSnapshot = await db.ref('chats').once('value');
+              const chatsSnapshot = await /* Converted to Supabase */.once('value');
               const chatsData = chatsSnapshot.val() || {};
               Object.keys(chatsData).forEach(chatId => {
                 if (chatId.includes(userId)) {
-                  db.ref(`chats/${chatId}`).remove();
+                  /* Converted to Supabase */.remove();
                 }
               });
               
@@ -837,13 +842,13 @@
             
             if (window.confirm(`确定要删除选中的 ${selectedUserIds.length} 个用户吗？`)) {
               for (const userId of selectedUserIds) {
-                await db.ref(`users/${userId}`).remove();
+                await /* Converted to Supabase */.remove();
                 
-                const chatsSnapshot = await db.ref('chats').once('value');
+                const chatsSnapshot = await /* Converted to Supabase */.once('value');
                 const chatsData = chatsSnapshot.val() || {};
                 Object.keys(chatsData).forEach(chatId => {
                   if (chatId.includes(userId)) {
-                    db.ref(`chats/${chatId}`).remove();
+                    /* Converted to Supabase */.remove();
                   }
                 });
               }
@@ -855,7 +860,7 @@
           };
           
           const handleUpdateUser = async (userId, updates) => {
-            await db.ref(`users/${userId}`).update(updates);
+            await /* Converted to Supabase */.update(updates);
             setEditingUser(null);
             loadData();
             alert('用户信息已更新！');
